@@ -1,19 +1,28 @@
 package wumo.world.envs.classic_control
 
+import com.badlogic.gdx.graphics.Color
+import com.badlogic.gdx.graphics.Color.BLACK
 import javafx.application.Application
 import javafx.application.Platform
 import javafx.scene.Group
 import javafx.scene.Scene
 import javafx.scene.canvas.Canvas
 import javafx.stage.Stage
+import wumo.sim.graphics.Config
+import wumo.sim.graphics.Geom
+import wumo.sim.graphics.ShapeType
+import wumo.sim.graphics.ShapeType.Lines
+import wumo.sim.graphics.Viewer
 import wumo.world.core.Env
 import wumo.world.spaces.Box
 import wumo.world.spaces.Discrete
 import wumo.world.util.collections.arrayCopy
 import wumo.world.util.math.Rand
 import wumo.world.util.math.unaryMinus
+import wumo.world.util.rangeTo
 import wumo.world.util.tuples.tuple4
 import java.util.concurrent.CyclicBarrier
+import javax.swing.Spring.height
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
@@ -93,69 +102,73 @@ class CartPole : Env<DoubleArray, Int> {
     return s
   }
   
+  lateinit var viewer: Viewer
+  lateinit var cart: Geom
+  lateinit var pole: Geom
   override fun render() {
-    if (!CartPoleUI.bound) {
+    val screen_width = 600
+    val screen_height = 400
     
+    val world_width: Float = (x_threshold * 2).toFloat()
+    val scale: Float = screen_width / world_width
+    val carty = 100f // TOP OF CART
+    val polewidth = 10f
+    val polelen = scale * 1f
+    val cartwidth = 50f
+    val cartheight = 30f
+    
+    if (!::viewer.isInitialized) {
+      val axleoffset = cartheight / 4f
+      viewer = Viewer(Config(screen_width, screen_height, isContinousRendering = false))
+      cart = Geom {
+        val l = -cartwidth / 2f
+        val r = cartwidth / 2f
+        val t = cartheight / 2f
+        val b = -cartheight / 2f
+        color(BLACK)
+        rect_filled(l, b, r, b, r, t, l, t)
+      }.apply { z = -2f }
+      pole = Geom {
+        val l = -polewidth / 2f
+        val r = polewidth / 2f
+        val t = polelen - polewidth / 2f
+        val b = -polewidth / 2f
+        color(.8f, .6f, .4f, 1f)
+        rect_filled(l, b, r, b, r, t, l, t)
+      }.apply {
+        z = -1f
+      }.attr {
+        translation.set(0f, axleoffset)
+            .add(cart.translation)
+      }
+      val axle = Geom {
+        color(.5f, .5f, .8f, 1f)
+        circle(0f, axleoffset, polewidth / 2f)
+      }.attr {
+        translation.set(cart.translation)
+      }
+      val track = Geom(Lines) {
+        color(BLACK)
+        line(0f, carty, screen_width.toFloat(), carty)
+      }
+      viewer += cart
+      viewer += pole
+      viewer += axle
+      viewer += track
+      viewer.startAsync()
     }
+    val x = state
+    val cartx = x[0] * scale + screen_width / 2
+    cart.translation.set(cartx.toFloat(), carty)
+    pole.rotation = (-x[2]).toFloat()
+    viewer.requestRender()
+    Thread.sleep(1000 / 60)
   }
   
   override fun close() {
-    Platform.exit()
-    CartPoleUI.bound = false
+    viewer.close()
   }
   
   override fun seed() {
-  }
-}
-
-
-class CartPoleUI : Application() {
-  lateinit var canvas: Canvas
-  
-  companion object {
-    var bound = false
-    var render: (Double) -> Unit = { }
-    var after: () -> Unit = {}
-    var width = 600.0
-    var height = 400.0
-  }
-  
-  override fun start(ps: Stage?) {
-    val primaryStage = ps!!
-    primaryStage.title = "CartPole"
-    val root = Group()
-    canvas = Canvas(width, height)
-    root.children.add(canvas)
-    primaryStage.scene = Scene(root)
-    primaryStage.show()
-    render = this::render
-    after()
-  }
-  
-  val barrier = CyclicBarrier(2)
-  fun tx(x: Double) = (x + PI / 2) / (2 * PI / 3) * width
-  fun ty(y: Double) = (-y + 1) / 2 * height
-  fun render(position: Double) {
-    barrier.reset()
-    Platform.runLater {
-      val gc = canvas.graphicsContext2D
-      gc.clearRect(0.0, 0.0, width, height)
-      for (i in 0..40) {
-        val x1 = i / 40.0 * 2 * PI / 3
-        val y1 = sin(3 * (x1 + PI / 6))
-        val x2 = (i + 1) / 40.0 * 2 * PI / 3
-        val y2 = sin(3 * (x2 + PI / 6))
-        gc.strokeLine(i / 40.0 * width, ty(y1), (i + 1) / 40.0 * width, ty(y2))
-      }
-      val min_x = tx(min_position)
-      val min_y = ty(sin(3 * min_position))
-      gc.strokeLine(min_x, min_y, min_x + 10, min_y)
-      val ball_x = tx(position)
-      val ball_y = ty(sin(3 * position))
-      gc.strokeOval(ball_x, ball_y, 10.0, 10.0)
-      barrier.await()
-    }
-    Thread.sleep(30)
-    barrier.await()
   }
 }
