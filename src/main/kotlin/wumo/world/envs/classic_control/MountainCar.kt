@@ -23,12 +23,15 @@ import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
 
-val min_position = -1.2
-val max_position = 0.6
-val max_speed = 0.07
-val goal_position = 0.5
 
 class MountainCar : Env<DoubleArray, Int> {
+  companion object {
+    val min_position = -1.2
+    val max_position = 0.6
+    val max_speed = 0.07
+    val goal_position = 0.5
+  }
+  
   val state = DoubleArray(2)
   
   override val action_space = Discrete(3)
